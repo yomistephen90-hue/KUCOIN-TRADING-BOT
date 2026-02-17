@@ -1,0 +1,60 @@
+# ============================================================================
+# SECURITY - Prevent sensitive files from being uploaded to GitHub
+# ============================================================================
+
+# Credentials - NEVER upload these!
+.env
+.env.local
+.env.*.local
+kucoin_config.json
+
+# Logs and data files
+*.log
+trading_bot.log
+trades.csv
+*.sqlite
+*.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+.cache/
+temp/
+tmp/
+*.tmp
+test_output/
+
+# OS
+Thumbs.db
+.DS_Store
