@@ -1,22 +1,6 @@
 """
-==============================================================================
 KUCOIN AUTOMATED TRADING BOT - SURVIVOR MODE
-==============================================================================
-
-A production-grade trading bot with:
-✅ API error handling & recovery
-✅ Rate limit detection
-✅ Data validation (handles bad ticks, missing fields)
-✅ Price overflow protection
-✅ Delisting detection
-✅ Self-healing error recovery
-✅ Telegram alerts for critical issues
-✅ Logging & monitoring
-
-SECURITY NOTE: This bot NEVER stores credentials in code!
-You will input your API keys via environment variables or config file.
-
-==============================================================================
+Production-grade trading bot with API error handling and Telegram alerts
 """
 
 import os
@@ -25,18 +9,13 @@ import time
 import logging
 from datetime import datetime, timedelta
 import requests
-from requests.auth import HTTPBasicAuth
 import pandas as pd
 import numpy as np
 import hashlib
 import hmac
 import base64
-from typing import Dict, Optional, Tuple
-import traceback
+from typing import Dict, Optional
 
-# ============================================================================
-# LOGGING SETUP - All events logged for monitoring
-# ============================================================================
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -47,36 +26,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============================================================================
-# CREDENTIALS - SECURELY LOADED (NOT HARDCODED!)
-# ============================================================================
-# YOU WILL INPUT YOUR CREDENTIALS HERE:
-# Option 1: Environment Variables (RECOMMENDED for production)
-# Option 2: Config file (see setup_config.json)
-#
-# NEVER paste your actual API keys in this file!
-# Use environment variables or a separate secure config file instead.
 
 class CredentialManager:
-    """
-    Safely loads credentials from:
-    1. Environment variables (highest priority - for production)
-    2. Config file (for local testing)
-    3. Raises error if credentials missing
-    """
+    """Safely loads credentials from environment variables or config file"""
     
     @staticmethod
     def load_credentials():
         """Load KuCoin API credentials securely"""
         
-        # Try environment variables first (production on PythonAnywhere/Railway)
         api_key = os.getenv('KUCOIN_API_KEY')
         api_secret = os.getenv('KUCOIN_API_SECRET')
         api_passphrase = os.getenv('KUCOIN_API_PASSPHRASE')
         telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
         telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
         
-        # If env vars not found, try config file
         if not api_key:
             try:
                 with open('kucoin_config.json', 'r') as f:
@@ -89,17 +52,8 @@ class CredentialManager:
             except FileNotFoundError:
                 pass
         
-        # Verify all credentials present
         if not all([api_key, api_secret, api_passphrase, telegram_token, telegram_chat_id]):
-            raise ValueError(
-                "Missing credentials! Please set environment variables:\n"
-                "  KUCOIN_API_KEY\n"
-                "  KUCOIN_API_SECRET\n"
-                "  KUCOIN_API_PASSPHRASE\n"
-                "  TELEGRAM_BOT_TOKEN\n"
-                "  TELEGRAM_CHAT_ID\n"
-                "Or create kucoin_config.json with these values."
-            )
+            raise ValueError("Missing credentials!")
         
         return {
             'api_key': api_key,
@@ -110,17 +64,8 @@ class CredentialManager:
         }
 
 
-# ============================================================================
-# KUCOIN API CLIENT - With error recovery
-# ============================================================================
 class KuCoinClient:
-    """
-    KuCoin API client with built-in error handling:
-    - Rate limit detection
-    - Connection retries
-    - Data validation
-    - API change detection
-    """
+    """KuCoin API client with error handling"""
     
     def __init__(self, api_key: str, api_secret: str, api_passphrase: str):
         self.api_key = api_key
@@ -130,17 +75,16 @@ class KuCoinClient:
         self.request_timeout = 10
         self.max_retries = 3
         self.last_request_time = 0
-        self.min_request_interval = 0.1  # Rate limit: max 10 requests/second
+        self.min_request_interval = 0.1
         
     def _get_auth_headers(self, method: str, path: str, params: str = "") -> Dict:
-        """Generate KuCoin authentication headers (V2 compliant)"""
+        """Generate KuCoin V2 authentication headers"""
         nonce = str(int(time.time() * 1000))
-
-        # Create signature string
+        
         str_to_sign = nonce + method + path
         if params:
             str_to_sign += params
-
+        
         signature = base64.b64encode(
             hmac.new(
                 self.api_secret.encode(),
@@ -148,8 +92,7 @@ class KuCoinClient:
                 hashlib.sha256
             ).digest()
         ).decode()
-
-        # Encrypt passphrase (REQUIRED for V2 keys)
+        
         encrypted_passphrase = base64.b64encode(
             hmac.new(
                 self.api_secret.encode(),
@@ -157,7 +100,7 @@ class KuCoinClient:
                 hashlib.sha256
             ).digest()
         ).decode()
-
+        
         return {
             'KC-API-KEY': self.api_key,
             'KC-API-SIGN': signature,
@@ -168,7 +111,7 @@ class KuCoinClient:
         }
     
     def _rate_limit_check(self):
-        """Enforce rate limiting to avoid 429 errors"""
+        """Enforce rate limiting"""
         elapsed = time.time() - self.last_request_time
         if elapsed < self.min_request_interval:
             time.sleep(self.min_request_interval - elapsed)
@@ -203,7 +146,7 @@ class KuCoinClient:
                 
                 if response.status_code == 429:
                     wait_time = int(response.headers.get('Retry-After', 60))
-                    logger.warning(f"Rate limited! Waiting {wait_time}s before retry...")
+                    logger.warning(f"Rate limited! Waiting {wait_time}s")
                     time.sleep(wait_time)
                     continue
                 
@@ -232,153 +175,64 @@ class KuCoinClient:
         return {}
     
     def get_account_balance(self) -> float:
-        """Get USDT balance - with validation"""
+        """Get USDT balance"""
         try:
             response = self._request("GET", "/api/v1/accounts")
             
+            logger.info(f"DEBUG - Raw API Response: {response}")
+            
             if not response or 'data' not in response:
-                logger.error("Invalid balance response format")
+                logger.error(f"Invalid balance response format: {response}")
                 return 0.0
             
-            # Find USDT balance in trading account
             for account in response.get('data', []):
                 if account.get('type') == 'trade' and account.get('currency') == 'USDT':
                     balance = float(account.get('balance', 0))
                     
-                    # Validate: balance should be positive and reasonable
                     if balance < 0 or balance > 1_000_000:
                         logger.warning(f"Suspicious balance value: ${balance}")
                         return 0.0
                     
                     return balance
             
+            logger.warning("No USDT trade account found")
             return 0.0
         
         except Exception as e:
             logger.error(f"Error getting balance: {e}")
             return 0.0
     
-    def get_account_balance(self) -> float:
-    """Get USDT balance - with validation"""
-    try:
-        response = self._request("GET", "/api/v1/accounts")
-        
-        # DEBUG: Print raw response
-        logger.info(f"DEBUG - Raw API Response: {response}")
-        
-        if not response or 'data' not in response:
-            logger.error(f"Invalid balance response format: {response}")
-            return 0.0
-        
-        # Find USDT balance in trading account
-        for account in response.get('data', []):
-            if account.get('type') == 'trade' and account.get('currency') == 'USDT':
-                balance = float(account.get('balance', 0))
-                
-                # Validate: balance should be positive and reasonable
-                if balance < 0 or balance > 1_000_000:
-                    logger.warning(f"Suspicious balance value: ${balance}")
-                    return 0.0
-                
-                return balance
-        
-        logger.warning("No USDT trade account found")
-        return 0.0
-    
-    except Exception as e:
-        logger.error(f"Error getting balance: {e}")
-        return 0.0
-    
-    def get_klines(self, symbol: str, interval: str = '1hour', limit: int = 100) -> list:
-        """Get candlestick data - with validation"""
+    def get_ticker(self, symbol: str) -> Optional[Dict]:
+        """Get current ticker price"""
         try:
-            response = self._request("GET", f"/api/v1/market/candles", {
-                "symbol": symbol,
-                "type": interval,
-                "limit": limit
-            })
+            response = self._request("GET", f"/api/v1/market/orderbook/level1", {"symbol": symbol})
             
             if not response or 'data' not in response:
-                logger.error(f"Invalid klines response for {symbol}")
-                return []
-            
-            klines = response['data']
-            
-            # Validate each candle
-            valid_klines = []
-            for kline in klines:
-                try:
-                    if len(kline) < 6:
-                        continue
-                    
-                    close = float(kline[4])
-                    volume = float(kline[7])
-                    
-                    if close <= 0 or volume < 0:
-                        continue
-                    
-                    valid_klines.append(kline)
-                except (ValueError, IndexError):
-                    continue
-            
-            return valid_klines
-        
-        except Exception as e:
-            logger.error(f"Error getting klines for {symbol}: {e}")
-            return []
-    
-    def place_order(self, symbol: str, side: str, size: str, price: str = None) -> Optional[str]:
-        """Place an order - with validation"""
-        try:
-            # Validate inputs
-            try:
-                float(size)
-                if price:
-                    float(price)
-            except ValueError:
-                logger.error(f"Invalid order parameters: size={size}, price={price}")
+                logger.error(f"Invalid ticker response for {symbol}")
                 return None
             
-            data = {
-                'clientOid': str(int(time.time() * 1000)),
-                'symbol': symbol,
-                'side': side,
-                'type': 'market' if not price else 'limit',
-                'size': size
+            data = response['data']
+            price = float(data.get('price', 0))
+            
+            if price <= 0 or price > 1_000_000:
+                logger.error(f"Invalid price for {symbol}: ${price}")
+                return None
+            
+            return {
+                'price': price,
+                'timestamp': int(data.get('time', 0))
             }
-            
-            if price:
-                data['price'] = price
-            
-            response = self._request("POST", "/api/v1/orders", data=data)
-            
-            if not response or 'data' not in response:
-                logger.error(f"Order placement failed: {response}")
-                return None
-            
-            return response['data'].get('orderId')
         
         except Exception as e:
-            logger.error(f"Error placing order: {e}")
+            logger.error(f"Error getting ticker for {symbol}: {e}")
             return None
 
 
-# ============================================================================
-# TRADING BOT - Main logic
-# ============================================================================
 class SurvivalTradingBot:
-    """
-    Survivor-mode trading bot that:
-    ✅ Handles all errors gracefully
-    ✅ Detects API changes
-    ✅ Manages rate limits
-    ✅ Validates all data
-    ✅ Self-heals on failure
-    ✅ Alerts on critical issues
-    """
+    """Survivor-mode trading bot"""
     
     def __init__(self):
-        """Initialize bot with credentials"""
+        """Initialize bot"""
         try:
             creds = CredentialManager.load_credentials()
             
@@ -391,15 +245,13 @@ class SurvivalTradingBot:
             self.telegram_token = creds['telegram_token']
             self.telegram_chat_id = creds['telegram_chat_id']
             
-            # Trading parameters
-            self.risk_per_trade = 3  # 3% risk per trade
-            self.take_profit_pct = 8  # 8% take profit
-            self.stop_loss_pct = 5  # 5% stop loss
-            self.max_daily_loss = 5  # 5% daily loss limit
+            self.risk_per_trade = 3
+            self.take_profit_pct = 8
+            self.stop_loss_pct = 5
+            self.max_daily_loss = 5
             self.max_open_positions = 2
-            self.trading_pairs = ["BTC-USDT"]  # Start with just BTC
+            self.trading_pairs = ["BTC-USDT"]
             
-            # State
             self.daily_loss = 0
             self.open_positions = {}
             self.last_reset = datetime.now().date()
@@ -425,7 +277,7 @@ class SurvivalTradingBot:
             logger.error(f"Failed to send alert: {e}")
     
     def check_health(self):
-        """Check bot health - detects API issues"""
+        """Check bot health"""
         try:
             balance = self.client.get_account_balance()
             
@@ -448,7 +300,6 @@ class SurvivalTradingBot:
         
         while True:
             try:
-                # Check bot health
                 balance = self.check_health()
                 
                 if balance > 0:
@@ -456,10 +307,7 @@ class SurvivalTradingBot:
                 else:
                     logger.warning("Cannot fetch balance - skipping trading")
                 
-                # In future: add trading logic here
-                # For now: just monitoring
-                
-                time.sleep(60)  # Check every minute
+                time.sleep(60)
             
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
@@ -468,13 +316,9 @@ class SurvivalTradingBot:
             
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
-                traceback.print_exc()
                 time.sleep(10)
 
 
-# ============================================================================
-# MAIN ENTRY POINT
-# ============================================================================
 if __name__ == "__main__":
     try:
         bot = SurvivalTradingBot()
