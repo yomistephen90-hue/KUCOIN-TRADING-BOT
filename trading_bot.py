@@ -133,39 +133,39 @@ class KuCoinClient:
         self.min_request_interval = 0.1  # Rate limit: max 10 requests/second
         
     def _get_auth_headers(self, method: str, path: str, params: str = "") -> Dict:
-    """Generate KuCoin authentication headers (V2 compliant)"""
-    nonce = str(int(time.time() * 1000))
+        """Generate KuCoin authentication headers (V2 compliant)"""
+        nonce = str(int(time.time() * 1000))
 
-    # Create signature string
-    str_to_sign = nonce + method + path
-    if params:
-        str_to_sign += params
+        # Create signature string
+        str_to_sign = nonce + method + path
+        if params:
+            str_to_sign += params
 
-    signature = base64.b64encode(
-        hmac.new(
-            self.api_secret.encode(),
-            str_to_sign.encode(),
-            hashlib.sha256
-        ).digest()
-    ).decode()
+        signature = base64.b64encode(
+            hmac.new(
+                self.api_secret.encode(),
+                str_to_sign.encode(),
+                hashlib.sha256
+            ).digest()
+        ).decode()
 
-    # Encrypt passphrase (REQUIRED for V2 keys)
-    encrypted_passphrase = base64.b64encode(
-        hmac.new(
-            self.api_secret.encode(),
-            self.api_passphrase.encode(), # type: ignore
-            hashlib.sha256
-        ).digest()
-    ).decode()
+        # Encrypt passphrase (REQUIRED for V2 keys)
+        encrypted_passphrase = base64.b64encode(
+            hmac.new(
+                self.api_secret.encode(),
+                self.api_passphrase.encode(),
+                hashlib.sha256
+            ).digest()
+        ).decode()
 
-    return {
-        'KC-API-KEY': self.api_key,
-        'KC-API-SIGN': signature,
-        'KC-API-TIMESTAMP': nonce,
-        'KC-API-PASSPHRASE': encrypted_passphrase,
-        'KC-API-KEY-VERSION': '2',
-        'Content-Type': 'application/json'
-    }
+        return {
+            'KC-API-KEY': self.api_key,
+            'KC-API-SIGN': signature,
+            'KC-API-TIMESTAMP': nonce,
+            'KC-API-PASSPHRASE': encrypted_passphrase,
+            'KC-API-KEY-VERSION': '2',
+            'Content-Type': 'application/json'
+        }
     
     def _rate_limit_check(self):
         """Enforce rate limiting to avoid 429 errors"""
