@@ -258,31 +258,36 @@ class KuCoinClient:
             logger.error(f"Error getting balance: {e}")
             return 0.0
     
-    def get_ticker(self, symbol: str) -> Optional[Dict]:
-        """Get current ticker price - with validation"""
-        try:
-            response = self._request("GET", f"/api/v1/market/orderbook/level1", {"symbol": symbol})
-            
-            if not response or 'data' not in response:
-                logger.error(f"Invalid ticker response for {symbol}")
-                return None
-            
-            data = response['data']
-            price = float(data.get('price', 0))
-            
-            # Validate price
-            if price <= 0 or price > 1_000_000:
-                logger.error(f"Invalid price for {symbol}: ${price}")
-                return None
-            
-            return {
-                'price': price,
-                'timestamp': int(data.get('time', 0))
-            }
+    def get_account_balance(self) -> float:
+    """Get USDT balance - with validation"""
+    try:
+        response = self._request("GET", "/api/v1/accounts")
         
-        except Exception as e:
-            logger.error(f"Error getting ticker for {symbol}: {e}")
-            return None
+        # DEBUG: Print raw response
+        logger.info(f"DEBUG - Raw API Response: {response}")
+        
+        if not response or 'data' not in response:
+            logger.error(f"Invalid balance response format: {response}")
+            return 0.0
+        
+        # Find USDT balance in trading account
+        for account in response.get('data', []):
+            if account.get('type') == 'trade' and account.get('currency') == 'USDT':
+                balance = float(account.get('balance', 0))
+                
+                # Validate: balance should be positive and reasonable
+                if balance < 0 or balance > 1_000_000:
+                    logger.warning(f"Suspicious balance value: ${balance}")
+                    return 0.0
+                
+                return balance
+        
+        logger.warning("No USDT trade account found")
+        return 0.0
+    
+    except Exception as e:
+        logger.error(f"Error getting balance: {e}")
+        return 0.0
     
     def get_klines(self, symbol: str, interval: str = '1hour', limit: int = 100) -> list:
         """Get candlestick data - with validation"""
