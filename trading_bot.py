@@ -175,46 +175,50 @@ class KuCoinClient:
         self.last_request_time = time.time()
     
     def _request(self, method: str, endpoint: str, params: Dict = None, data: Dict = None) -> Dict:
-        """Make authenticated API request with retry logic"""
-        
-        path = endpoint
-        params_str = ""
-        
-        if params and method == "GET":
-            params_str = "&".join([f"{k}={v}" for k, v in params.items()])
-            path = f"{endpoint}?{params_str}"
-        
-        headers = self._get_auth_headers(method, path, params_str)
-        url = self.base_url + path
-        
-        # Retry logic
-        for attempt in range(self.max_retries):
-            try:
-                self._rate_limit_check()
-                
-                if method == "GET":
-                    response = requests.get(url, headers=headers, timeout=self.request_timeout)
-                elif method == "POST":
-                    response = requests.post(url, headers=headers, json=data, timeout=self.request_timeout)
-                else:
-                    raise ValueError(f"Unsupported method: {method}")
-                
-                # Check for rate limit error
-                if response.status_code == 429:
-                    wait_time = int(response.headers.get('Retry-After', 60))
-                    logger.warning(f"Rate limited! Waiting {wait_time}s before retry...")
-                    time.sleep(wait_time)
+    """Make authenticated API request with retry logic"""
+    
+    path = endpoint
+    params_str = ""
+    
+    if params and method == "GET":
+        params_str = "&".join([f"{k}={v}" for k, v in params.items()])
+        path = f"{endpoint}?{params_str}"
+    
+    headers = self._get_auth_headers(method, path, params_str)
+    url = self.base_url + path
+    
+    # Retry logic
+    for attempt in range(self.max_retries):
+        try:
+            self._rate_limit_check()
+            
+            if method == "GET":
+                response = requests.get(url, headers=headers, timeout=self.request_timeout)
+            elif method == "POST":
+                response = requests.post(url, headers=headers, json=data, timeout=self.request_timeout)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+            
+            # DEBUG: Log everything
+            logger.info(f"DEBUG - Status: {response.status_code}")
+            logger.info(f"DEBUG - Response Text: {response.text}")
+            
+            # Check for rate limit error
+            if response.status_code == 429:
+                wait_time = int(response.headers.get('Retry-After', 60))
+                logger.warning(f"Rate limited! Waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                continue
+            
+            # Check for API errors
+            if response.status_code != 200:
+                logger.error(f"API Error {response.status_code}: {response.text}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
                     continue
-                
-                # Check for API errors
-                if response.status_code != 200:
-                    logger.error(f"API Error {response.status_code}: {response.text}")
-                    if attempt < self.max_retries - 1:
-                        time.sleep(2 ** attempt)  # Exponential backoff
-                        continue
-                    return {}
-                
-                return response.json()
+                return {}
+            
+            return response.json()
             
             except requests.exceptions.Timeout:
                 logger.warning(f"Request timeout (attempt {attempt + 1}/{self.max_retries})")
