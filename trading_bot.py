@@ -1,12 +1,10 @@
 """
-<<<<<<< HEAD
+
 BINANCE AUTOMATED TRADING BOT - SURVIVOR MODE
 Production-grade trading bot with API error handling and Telegram alerts
 Works with Railway - No US geo-blocking issues
-=======
 KUCOIN AUTOMATED TRADING BOT - SURVIVOR MODE
 Production-grade trading bot with API error handling and Telegram alerts
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
 """
 
 import os
@@ -19,10 +17,7 @@ import pandas as pd
 import numpy as np
 import hashlib
 import hmac
-<<<<<<< HEAD
-=======
 import base64
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
 from typing import Dict, Optional
 
 logging.basicConfig(
@@ -43,14 +38,14 @@ class CredentialManager:
     def load_credentials():
         """Load Binance API credentials securely"""
         
-<<<<<<< HEAD
+
         api_key = os.getenv('BINANCE_API_KEY')
         api_secret = os.getenv('BINANCE_API_SECRET')
-=======
+
         api_key = os.getenv('KUCOIN_API_KEY')
         api_secret = os.getenv('KUCOIN_API_SECRET')
         api_passphrase = os.getenv('KUCOIN_API_PASSPHRASE')
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
         telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
         telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
         
@@ -65,11 +60,10 @@ class CredentialManager:
             except FileNotFoundError:
                 pass
         
-<<<<<<< HEAD
+
         if not all([api_key, api_secret, telegram_token, telegram_chat_id]):
-=======
-        if not all([api_key, api_secret, api_passphrase, telegram_token, telegram_chat_id]):
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
+        if not all([api_key, api_secret, telegram_token, telegram_chat_id]):
             raise ValueError("Missing credentials!")
         
         return {
@@ -80,13 +74,11 @@ class CredentialManager:
         }
 
 
-<<<<<<< HEAD
+
 class BinanceClient:
     """Binance API client with error handling"""
-=======
 class KuCoinClient:
     """KuCoin API client with error handling"""
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
     
     def __init__(self, api_key: str, api_secret: str):
         self.api_key = api_key
@@ -97,7 +89,6 @@ class KuCoinClient:
         self.last_request_time = 0
         self.min_request_interval = 0.1
         
-<<<<<<< HEAD
     def _get_signature(self, params_str: str) -> str:
         """Generate Binance signature"""
         return hmac.new(
@@ -108,7 +99,7 @@ class KuCoinClient:
     
     def _get_headers(self) -> Dict:
         """Get Binance request headers"""
-=======
+
     def _get_auth_headers(self, method: str, path: str, params: str = "") -> Dict:
         """Generate KuCoin V2 authentication headers"""
         nonce = str(int(time.time() * 1000))
@@ -133,7 +124,6 @@ class KuCoinClient:
             ).digest()
         ).decode()
         
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
         return {
             'X-MBX-APIKEY': self.api_key,
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -209,8 +199,7 @@ class KuCoinClient:
         """Get USDT balance"""
         try:
             response = self._request("GET", "/api/v3/account")
-            
-<<<<<<< HEAD
+        
             logger.info(f"DEBUG - Raw Response: {str(response)[:200]}")
             
             if not response or 'balances' not in response:
@@ -223,7 +212,7 @@ class KuCoinClient:
                     
                     if free_balance < 0 or free_balance > 1_000_000:
                         logger.warning(f"Suspicious balance: ${free_balance}")
-=======
+
             logger.info(f"DEBUG - Raw API Response: {response}")
             
             if not response or 'data' not in response:
@@ -236,16 +225,16 @@ class KuCoinClient:
                     
                     if balance < 0 or balance > 1_000_000:
                         logger.warning(f"Suspicious balance value: ${balance}")
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
                         return 0.0
                     
                     return free_balance
             
-<<<<<<< HEAD
+
             logger.warning("No USDT balance found")
-=======
+
             logger.warning("No USDT trade account found")
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
             return 0.0
         
         except Exception as e:
@@ -255,7 +244,7 @@ class KuCoinClient:
     def get_ticker(self, symbol: str) -> Optional[Dict]:
         """Get current ticker price"""
         try:
-<<<<<<< HEAD
+
             response = self._request("GET", "/api/v3/ticker/price", {"symbol": symbol})
             
             if not response or 'price' not in response:
@@ -308,7 +297,7 @@ class KuCoinClient:
                 return None
             
             return str(response['orderId'])
-=======
+
             response = self._request("GET", f"/api/v1/market/orderbook/level1", {"symbol": symbol})
             
             if not response or 'data' not in response:
@@ -326,7 +315,7 @@ class KuCoinClient:
                 'price': price,
                 'timestamp': int(data.get('time', 0))
             }
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
         
         except Exception as e:
             logger.error(f"Error getting ticker for {symbol}: {e}")
@@ -334,11 +323,11 @@ class KuCoinClient:
 
 
 class SurvivalTradingBot:
-<<<<<<< HEAD
+
     """Survivor-mode trading bot for Binance"""
-=======
+
     """Survivor-mode trading bot"""
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
     
     def __init__(self):
         """Initialize bot"""
@@ -358,11 +347,11 @@ class SurvivalTradingBot:
             self.stop_loss_pct = 5
             self.max_daily_loss = 5
             self.max_open_positions = 2
-<<<<<<< HEAD
+
             self.trading_pairs = ["BTCUSDT", "ETHUSDT"]
-=======
+
             self.trading_pairs = ["BTC-USDT"]
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
             
             self.daily_loss = 0
             self.open_positions = {}
@@ -426,11 +415,11 @@ class SurvivalTradingBot:
                 break
             
             except Exception as e:
-<<<<<<< HEAD
+
                 logger.error(f"Error: {e}")
-=======
+
                 logger.error(f"Error in main loop: {e}")
->>>>>>> b65e552d8d5d6e44728767b4a472f2181a283ab4
+
                 time.sleep(10)
 
 
