@@ -1,9 +1,5 @@
 """
-
 BINANCE AUTOMATED TRADING BOT - SURVIVOR MODE
-Production-grade trading bot with API error handling and Telegram alerts
-Works with Railway - No US geo-blocking issues
-KUCOIN AUTOMATED TRADING BOT - SURVIVOR MODE
 Production-grade trading bot with API error handling and Telegram alerts
 """
 
@@ -17,7 +13,6 @@ import pandas as pd
 import numpy as np
 import hashlib
 import hmac
-import base64
 from typing import Dict, Optional
 
 logging.basicConfig(
@@ -38,14 +33,8 @@ class CredentialManager:
     def load_credentials():
         """Load Binance API credentials securely"""
         
-
         api_key = os.getenv('BINANCE_API_KEY')
         api_secret = os.getenv('BINANCE_API_SECRET')
-
-        api_key = os.getenv('KUCOIN_API_KEY')
-        api_secret = os.getenv('KUCOIN_API_SECRET')
-        api_passphrase = os.getenv('KUCOIN_API_PASSPHRASE')
-
         telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
         telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
         
@@ -60,9 +49,6 @@ class CredentialManager:
             except FileNotFoundError:
                 pass
         
-
-        if not all([api_key, api_secret, telegram_token, telegram_chat_id]):
-
         if not all([api_key, api_secret, telegram_token, telegram_chat_id]):
             raise ValueError("Missing credentials!")
         
@@ -74,11 +60,8 @@ class CredentialManager:
         }
 
 
-
 class BinanceClient:
     """Binance API client with error handling"""
-class KuCoinClient:
-    """KuCoin API client with error handling"""
     
     def __init__(self, api_key: str, api_secret: str):
         self.api_key = api_key
@@ -99,31 +82,6 @@ class KuCoinClient:
     
     def _get_headers(self) -> Dict:
         """Get Binance request headers"""
-
-    def _get_auth_headers(self, method: str, path: str, params: str = "") -> Dict:
-        """Generate KuCoin V2 authentication headers"""
-        nonce = str(int(time.time() * 1000))
-        
-        str_to_sign = nonce + method + path
-        if params:
-            str_to_sign += params
-        
-        signature = base64.b64encode(
-            hmac.new(
-                self.api_secret.encode(),
-                str_to_sign.encode(),
-                hashlib.sha256
-            ).digest()
-        ).decode()
-        
-        encrypted_passphrase = base64.b64encode(
-            hmac.new(
-                self.api_secret.encode(),
-                self.api_passphrase.encode(),
-                hashlib.sha256
-            ).digest()
-        ).decode()
-        
         return {
             'X-MBX-APIKEY': self.api_key,
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -143,7 +101,6 @@ class KuCoinClient:
             params = {}
         
         params['timestamp'] = int(time.time() * 1000)
-        
         params_str = "&".join([f"{k}={v}" for k, v in params.items()])
         signature = self._get_signature(params_str)
         params['signature'] = signature
@@ -199,7 +156,7 @@ class KuCoinClient:
         """Get USDT balance"""
         try:
             response = self._request("GET", "/api/v3/account")
-        
+            
             logger.info(f"DEBUG - Raw Response: {str(response)[:200]}")
             
             if not response or 'balances' not in response:
@@ -212,29 +169,11 @@ class KuCoinClient:
                     
                     if free_balance < 0 or free_balance > 1_000_000:
                         logger.warning(f"Suspicious balance: ${free_balance}")
-
-            logger.info(f"DEBUG - Raw API Response: {response}")
-            
-            if not response or 'data' not in response:
-                logger.error(f"Invalid balance response format: {response}")
-                return 0.0
-            
-            for account in response.get('data', []):
-                if account.get('type') == 'trade' and account.get('currency') == 'USDT':
-                    balance = float(account.get('balance', 0))
-                    
-                    if balance < 0 or balance > 1_000_000:
-                        logger.warning(f"Suspicious balance value: ${balance}")
-
                         return 0.0
                     
                     return free_balance
             
-
             logger.warning("No USDT balance found")
-
-            logger.warning("No USDT trade account found")
-
             return 0.0
         
         except Exception as e:
@@ -244,7 +183,6 @@ class KuCoinClient:
     def get_ticker(self, symbol: str) -> Optional[Dict]:
         """Get current ticker price"""
         try:
-
             response = self._request("GET", "/api/v3/ticker/price", {"symbol": symbol})
             
             if not response or 'price' not in response:
@@ -262,72 +200,10 @@ class KuCoinClient:
         except Exception as e:
             logger.error(f"Error getting ticker for {symbol}: {e}")
             return None
-    
-    def get_klines(self, symbol: str, interval: str = '1h', limit: int = 100) -> list:
-        """Get candlestick data"""
-        try:
-            response = self._request("GET", "/api/v3/klines", {
-                "symbol": symbol,
-                "interval": interval,
-                "limit": limit
-            })
-            
-            if not response or not isinstance(response, list):
-                logger.error(f"Invalid klines response for {symbol}")
-                return []
-            
-            return response
-        
-        except Exception as e:
-            logger.error(f"Error getting klines for {symbol}: {e}")
-            return []
-    
-    def place_order(self, symbol: str, side: str, quantity: float) -> Optional[str]:
-        """Place a market order"""
-        try:
-            response = self._request("POST", "/api/v3/order", {
-                "symbol": symbol,
-                "side": side,
-                "type": "MARKET",
-                "quantity": f"{quantity:.8f}"
-            })
-            
-            if not response or 'orderId' not in response:
-                logger.error(f"Order placement failed: {response}")
-                return None
-            
-            return str(response['orderId'])
-
-            response = self._request("GET", f"/api/v1/market/orderbook/level1", {"symbol": symbol})
-            
-            if not response or 'data' not in response:
-                logger.error(f"Invalid ticker response for {symbol}")
-                return None
-            
-            data = response['data']
-            price = float(data.get('price', 0))
-            
-            if price <= 0 or price > 1_000_000:
-                logger.error(f"Invalid price for {symbol}: ${price}")
-                return None
-            
-            return {
-                'price': price,
-                'timestamp': int(data.get('time', 0))
-            }
-
-        
-        except Exception as e:
-            logger.error(f"Error getting ticker for {symbol}: {e}")
-            return None
 
 
 class SurvivalTradingBot:
-
     """Survivor-mode trading bot for Binance"""
-
-    """Survivor-mode trading bot"""
-
     
     def __init__(self):
         """Initialize bot"""
@@ -347,11 +223,7 @@ class SurvivalTradingBot:
             self.stop_loss_pct = 5
             self.max_daily_loss = 5
             self.max_open_positions = 2
-
             self.trading_pairs = ["BTCUSDT", "ETHUSDT"]
-
-            self.trading_pairs = ["BTC-USDT"]
-
             
             self.daily_loss = 0
             self.open_positions = {}
@@ -415,11 +287,7 @@ class SurvivalTradingBot:
                 break
             
             except Exception as e:
-
                 logger.error(f"Error: {e}")
-
-                logger.error(f"Error in main loop: {e}")
-
                 time.sleep(10)
 
 
